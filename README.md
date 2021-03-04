@@ -16,7 +16,7 @@ npm install --save svelte-result-store
 ## Usage
 
 ```ts
-import {readable, derived} from 'svelte-result-store
+import {readable, derived} from 'svelte-result-store'
 
 const things = readable(async () => {
     const data = await getData()
