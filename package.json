@@ -20,6 +20,7 @@
         "prepare": "make"
     },
     "dependencies": {
+        "svelte": "^3.35.0",
         "tslib": "^2.1.0"
     },
     "devDependencies": {
