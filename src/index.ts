@@ -14,7 +14,7 @@ type StoresValues<T> = T extends Readable<Result<infer U>>
           [K in keyof T]: T[K] extends Readable<Result<infer U>> ? U : never
       }
 
-class ResultReadable<T> implements Readable<Result<T>> {
+export class ResultReadable<T> implements Readable<Result<T>> {
     private valueStore?: Readable<T | undefined>
     private errorStore?: Readable<Error | undefined>
     private resolvedStore?: Readable<boolean>
