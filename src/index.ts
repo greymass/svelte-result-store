@@ -14,7 +14,7 @@ type StoresValues<T> = T extends Readable<Result<infer U>>
           [K in keyof T]: T[K] extends Readable<Result<infer U>> ? U : never
       }
 
-export class ResultReadable<T> implements Readable<Result<T>> {
+export class ReadableResult<T> implements Readable<Result<T>> {
     private valueStore?: Readable<T | undefined>
     private errorStore?: Readable<Error | undefined>
     private resolvedStore?: Readable<boolean>
@@ -85,7 +85,7 @@ export class ResultReadable<T> implements Readable<Result<T>> {
     }
 }
 
-export function readable<T>(start: StartStopNotifier<T> | (() => Promise<T>)): ResultReadable<T> {
+export function readable<T>(start: StartStopNotifier<T> | (() => Promise<T>)): ReadableResult<T> {
     const result: Result<T> = {}
     const readable = svelteReadable(result, (setResult) => {
         try {
@@ -110,7 +110,7 @@ export function readable<T>(start: StartStopNotifier<T> | (() => Promise<T>)): R
             setResult({error})
         }
     })
-    return new ResultReadable(readable)
+    return new ReadableResult(readable)
 }
 
 type DerivedStartStopNotifier<S extends Stores, T> = (
@@ -125,7 +125,7 @@ type DerivedPromise<S extends Stores, T> = (values: StoresValues<S>) => Promise<
 export function derived<S extends Stores, T>(
     stores: S,
     fn: DerivedStartStopNotifier<S, T> | DerivedPromise<S, T>
-): ResultReadable<T> {
+): ReadableResult<T> {
     const single = !Array.isArray(stores)
     const store = svelteDerived<S, Result<T>>(stores, (storeValues, set) => {
         const results = single
@@ -164,5 +164,5 @@ export function derived<S extends Stores, T>(
             }
         }
     })
-    return new ResultReadable(store)
+    return new ReadableResult(store)
 }
