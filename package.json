@@ -1,16 +1,12 @@
 {
-    "name": "@greymass/PACKAGE",
-    "description": "DESCRIPTION",
-    "version": "0.0.0",
-    "homepage": "https://github.com/greymass/PACKAGE",
+    "name": "svelte-result-store",
+    "description": "Svelte store with error handling and propagation",
+    "version": "1.0.0",
+    "homepage": "https://github.com/greymass/svelte-result-store",
     "license": "BSD-3-Clause",
-    "main": "lib/PACKAGE.js",
-    "module": "lib/PACKAGE.m.js",
-    "types": "lib/PACKAGE.d.ts",
-    "browser": {
-        "buffer": false,
-        "crypto": false
-    },
+    "main": "lib/svelte-result-store.js",
+    "module": "lib/svelte-result-store.m.js",
+    "types": "lib/svelte-result-store.d.ts",
     "sideEffects": false,
     "files": [
         "lib/*",
