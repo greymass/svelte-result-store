@@ -1,7 +1,7 @@
 import {strict as assert} from 'assert'
 import 'mocha'
 
-import {derived, flatten, readable} from '../src'
+import {derived, flatten, readable, writable} from '../src'
 
 suite('result store', function () {
     test('subscribe', function (done) {
@@ -282,6 +282,14 @@ suite('result store', function () {
         })
     })
 
+    test('writable promise', async function () {
+        const store = writable({})
+        const promise = store.promise
+        store.set({value: 10})
+        const result = await promise
+        assert.equal(result, 10)
+    })
+
     test('result resolved', function (done) {
         let set: any
         const store = readable<number>((s) => {
@@ -323,16 +331,66 @@ suite('result store', function () {
     })
 
     test('flatten error', function (done) {
-        const a = readable<number>(async () => 10)
-        const b = readable(async () => {
+        const a = readable(async () => {
             throw new Error('fail')
         })
-        const c = readable(async () => b)
-        const d = flatten(c)
-        d.error.subscribe((e) => {
+        const b = readable(async () => a)
+        const c = flatten(b)
+        c.error.subscribe((e) => {
             if (e) {
                 assert.equal(String(e), 'Error: fail')
                 done()
+            }
+        })
+    })
+
+    test('replace error', function (done) {
+        const a = writable({value: 10})
+        const b = derived(a, ($a) => {
+            if ($a >= 10) {
+                throw new Error('fail')
+            } else {
+                return $a * $a
+            }
+        })
+        let n = 0
+        b.replaceErrors(42).subscribe((v) => {
+            switch (++n) {
+                case 1:
+                    assert.equal(v, 42)
+                    a.set({value: 2})
+                    break
+                case 2:
+                    assert.equal(v, 4)
+                    done()
+                    break
+                default:
+                    assert.fail()
+            }
+        })
+    })
+
+    test('writable', function (done) {
+        const a = writable({value: 10}, async (set) => {
+            await sleep(10)
+            set(20)
+        })
+        let n = 0
+        a.value.subscribe((v) => {
+            switch (++n) {
+                case 1:
+                    assert.equal(v, 10)
+                    break
+                case 2:
+                    assert.equal(v, 20)
+                    a.updateValue((v) => (v || 0) * 3)
+                    break
+                case 3:
+                    assert.equal(v, 60)
+                    done()
+                    break
+                default:
+                    assert.fail()
             }
         })
     })

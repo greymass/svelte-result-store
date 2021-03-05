@@ -1,11 +1,17 @@
-import {derived as svelteDerived, readable as svelteReadable} from 'svelte/store'
-import type {Readable} from 'svelte/store'
+import {
+    derived as svelteDerived,
+    readable as svelteReadable,
+    writable as svelteWritable,
+} from 'svelte/store'
+
+import type {Readable, Writable} from 'svelte/store'
 
 export type Result<T> = {value?: T; error?: Error}
 
 type Subscriber<T> = (value: T) => void
 type Unsubscriber = () => void
 type Invalidator<T> = (value?: T) => void
+type Updater<T> = (value: T) => T
 type Stores = Readable<Result<any>> | [Readable<Result<any>>, ...Array<Readable<Result<any>>>]
 type StoresValues<T> = T extends Readable<Result<infer U>>
     ? U
@@ -14,73 +20,103 @@ type StoresValues<T> = T extends Readable<Result<infer U>>
       }
 
 export class ReadableResult<T> implements Readable<Result<T>> {
-    private valueStore?: Readable<T | undefined>
-    private errorStore?: Readable<Error | undefined>
-    private resolvedStore?: Readable<boolean>
+    subscribe: (run: Subscriber<Result<T>>, invalidate?: Invalidator<Result<T>>) => Unsubscriber
 
-    constructor(private resultStore: Readable<Result<T>>) {}
-
-    subscribe(run: Subscriber<Result<T>>, invalidate?: Invalidator<Result<T>>): Unsubscriber {
-        return this.resultStore.subscribe(run, invalidate)
+    constructor(resultStore: Readable<Result<T>>) {
+        this.subscribe = resultStore.subscribe
     }
 
     /**
      * A store containing the value or undefined if there is an error.
-     * Can also be undefined for async stores while the value is resolved.
+     * Can also be undefined for async stores while the value is being resolved.
      */
     get value(): Readable<T | undefined> {
-        if (!this.valueStore) {
-            this.valueStore = svelteDerived(this.resultStore, (result, set) => {
-                if (result.error === undefined) {
-                    set(result.value)
-                }
-            })
+        return {
+            subscribe: (set) =>
+                this.subscribe((result) => {
+                    if (result.error === undefined) {
+                        set(result.value)
+                    }
+                }),
         }
-        return this.valueStore
+    }
+
+    /**
+     * A store always containing a value when the result is resolved.
+     * @param value The value used in place of errors.
+     */
+    replaceErrors(value: T): Readable<T | undefined> {
+        return {
+            subscribe: (set) =>
+                this.subscribe((result) => {
+                    if (result.error !== undefined) {
+                        set(value)
+                    } else if (result.value !== undefined) {
+                        set(result.value)
+                    }
+                }),
+        }
     }
 
     /**
      * A store containing the error or undefined.
      */
     get error(): Readable<Error | undefined> {
-        if (!this.errorStore) {
-            this.errorStore = svelteDerived(this.resultStore, (result, set) => {
-                if (result.error !== undefined) {
-                    set(result.error)
-                }
-            })
+        return {
+            subscribe: (set) =>
+                this.subscribe((result) => {
+                    if (result.error !== undefined) {
+                        set(result.error)
+                    }
+                }),
         }
-        return this.errorStore
     }
 
     /**
      * A store containing true if the readable has a result (a value or error), false otherwise.
      */
     get resolved(): Readable<boolean> {
-        if (!this.resolvedStore) {
-            this.resolvedStore = svelteDerived(
-                this.resultStore,
-                (result, set) => {
+        return {
+            subscribe: (set) =>
+                this.subscribe((result) => {
                     set(result.error !== undefined || result.value !== undefined)
-                },
-                false as boolean
-            )
+                }),
         }
-        return this.resolvedStore
     }
 
-    /** A promise that resolves or rejects on the first value or error. */
+    /**
+     * A promise that resolves or rejects on the first value or error.
+     */
     get promise(): Promise<T> {
         return new Promise((resolve, reject) => {
-            const done = this.resultStore.subscribe((result) => {
+            const done = this.subscribe((result) => {
                 if (result.error !== undefined) {
                     reject(result.error)
                 } else if (result.value !== undefined) {
                     resolve(result.value)
-                    done()
+                }
+                if (result.error !== undefined || result.value !== undefined) {
+                    setTimeout(() => {
+                        done()
+                    }, 0)
                 }
             })
         })
+    }
+}
+
+export class WritableResult<T> extends ReadableResult<T> implements Writable<Result<T>> {
+    set: (value: Result<T>) => void
+    update: (updater: Updater<Result<T>>) => void
+
+    constructor(resultStore: Writable<Result<T>>) {
+        super(resultStore)
+        this.set = resultStore.set
+        this.update = resultStore.update
+    }
+
+    updateValue(updater: Updater<T | undefined>) {
+        this.update((result) => ({value: updater(result.value)}))
     }
 }
 
@@ -89,34 +125,24 @@ type StartStopNotifier<T> = (
     error: Subscriber<Error>
 ) => Unsubscriber | Promise<T | void> | void
 
-export function readable<T>(start: StartStopNotifier<T>): ReadableResult<T> {
-    const result: Result<T> = {}
-    const readable = svelteReadable(result, (setResult) => {
-        try {
-            const rv = start(
-                (value) => {
-                    setResult({value})
-                },
-                (error) => {
-                    setResult({error})
-                }
-            )
-            if (rv instanceof Promise) {
-                rv.then((value) => {
-                    if (value !== undefined) {
-                        setResult({value})
-                    }
-                }).catch((error) => {
-                    setResult({error})
-                })
-            } else {
-                return rv
-            }
-        } catch (error) {
-            setResult({error})
-        }
-    })
-    return new ReadableResult(readable)
+/**
+ * Like svelte/store's readable but initial value is optional and start notifier can be async and throw.
+ */
+export function readable<T>(initial: Result<T>): ReadableResult<T>
+export function readable<T>(start: StartStopNotifier<T>): ReadableResult<T>
+export function readable<T>(initial: Result<T>, start: StartStopNotifier<T>): ReadableResult<T>
+export function readable<T>(...args: any[]): ReadableResult<T> {
+    return new ReadableResult(internalWritable(...args))
+}
+
+/**
+ * Like svelte/store's writable but initial value is optional and start notifier can be async and throw.
+ */
+export function writable<T>(initial: Result<T>): WritableResult<T>
+export function writable<T>(start: StartStopNotifier<T>): WritableResult<T>
+export function writable<T>(initial: Result<T>, start: StartStopNotifier<T>): WritableResult<T>
+export function writable<T>(...args: any[]): WritableResult<T> {
+    return new WritableResult(internalWritable(...args))
 }
 
 /**
@@ -182,6 +208,10 @@ type FlatReadableResult<R, D extends number> = {
         : R
 }[D extends -1 ? 'done' : 'recur']
 
+/**
+ * Takes nested readable and flattens it down to just one.
+ * @param maxDepth Maximum recursion depth, default 10.
+ */
 export function flatten<T extends ReadableResult<any>, D extends number = 10>(
     store: T,
     maxDepth?: D
@@ -218,6 +248,47 @@ function subscribeCleanup<T>(store: Readable<T>, run: CleanupSubscriber<T>): Uns
         cleanup()
         unsub()
     }
+}
+
+function internalWritable<T>(...args: any[]): Writable<Result<T>> {
+    let start: StartStopNotifier<T>
+    let result: Result<T> = {}
+    if (args.length === 2) {
+        result = args[0]
+        start = args[1]
+    } else {
+        start = typeof args[0] === 'function' ? args[0] : noop
+        result =
+            typeof args[0] === 'object' &&
+            (args[0].value !== undefined || args[0].error !== undefined)
+                ? args[0]
+                : {}
+    }
+    return svelteWritable(result, (setResult) => {
+        try {
+            const rv = start(
+                (value) => {
+                    setResult({value})
+                },
+                (error) => {
+                    setResult({error})
+                }
+            )
+            if (rv instanceof Promise) {
+                rv.then((value) => {
+                    if (value !== undefined) {
+                        setResult({value})
+                    }
+                }).catch((error) => {
+                    setResult({error})
+                })
+            } else {
+                return rv
+            }
+        } catch (error) {
+            setResult({error})
+        }
+    })
 }
 
 // eslint-disable-next-line @typescript-eslint/no-empty-function
