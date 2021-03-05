@@ -96,7 +96,7 @@ suite('result store', function () {
         })
     })
 
-    test('read async throwing', function (done) {
+    test('async throwing', function (done) {
         const store = readable<number>(async () => {
             throw new Error('fail')
         })
@@ -104,6 +104,33 @@ suite('result store', function () {
             if (error) {
                 assert.equal(String(error), 'Error: fail')
                 done()
+            }
+        })
+    })
+
+    test('async setter', function (done) {
+        const store = readable<number>(async (set) => {
+            await sleep(5)
+            set(1)
+            await sleep(5)
+            set(42)
+        })
+        let update = 0
+        store.value.subscribe((value) => {
+            update++
+            switch (update) {
+                case 1:
+                    assert.equal(value, undefined)
+                    break
+                case 2:
+                    assert.equal(value, 1)
+                    break
+                case 3:
+                    assert.equal(value, 42)
+                    done()
+                    break
+                default:
+                    assert.fail()
             }
         })
     })
@@ -217,6 +244,25 @@ suite('result store', function () {
         store.error.subscribe((error) => {
             if (error) {
                 assert.equal(String(error), 'Error: fail')
+                done()
+            }
+        })
+    })
+
+    test('derived auto', function (done) {
+        const a = readable<number>((set) => {
+            set(1)
+        })
+        const b = readable<number>(async () => {
+            await sleep(1)
+            return 2
+        })
+        const store = derived([a, b], ([va, vb]) => {
+            return va + vb
+        })
+        store.value.subscribe((value) => {
+            if (value) {
+                assert.equal(value, 3)
                 done()
             }
         })
