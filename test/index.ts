@@ -1,7 +1,7 @@
 import {strict as assert} from 'assert'
 import 'mocha'
 
-import {derived, readable} from '../src'
+import {derived, flatten, readable} from '../src'
 
 suite('result store', function () {
     test('subscribe', function (done) {
@@ -297,6 +297,42 @@ suite('result store', function () {
                     assert.equal(v, true)
                     done()
                 })
+            }
+        })
+    })
+
+    test('flatten', function (done) {
+        const a = readable<number>(async () => 10)
+        const b = readable(async () => a)
+        const c = readable((set) => {
+            const timer = setInterval(() => {
+                set(b)
+            }, 10)
+            return () => {
+                clearInterval(timer)
+            }
+        })
+        const d = flatten(c)
+        const unsub = d.value.subscribe((v) => {
+            if (v) {
+                assert.equal(v, 10)
+                unsub()
+                done()
+            }
+        })
+    })
+
+    test('flatten error', function (done) {
+        const a = readable<number>(async () => 10)
+        const b = readable(async () => {
+            throw new Error('fail')
+        })
+        const c = readable(async () => b)
+        const d = flatten(c)
+        d.error.subscribe((e) => {
+            if (e) {
+                assert.equal(String(e), 'Error: fail')
+                done()
             }
         })
     })

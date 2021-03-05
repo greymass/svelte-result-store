@@ -174,3 +174,51 @@ export function derived<S extends Stores, T>(stores: S, fn: any): ReadableResult
     })
     return new ReadableResult(store)
 }
+
+type FlatReadableResult<R, D extends number> = {
+    done: R
+    recur: R extends ReadableResult<infer Inner>
+        ? FlatReadableResult<Inner, [-1, 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10][D]>
+        : R
+}[D extends -1 ? 'done' : 'recur']
+
+export function flatten<T extends ReadableResult<any>, D extends number = 10>(
+    store: T,
+    maxDepth?: D
+): ReadableResult<FlatReadableResult<T, D>> {
+    const max = maxDepth || 10
+    const result: Result<any> = {}
+    const flat = svelteReadable(result, (set) => {
+        const next = (d: number) => (r: any) => {
+            if (r.error) {
+                set({error: r.error})
+            } else {
+                if (r.value && typeof r.value.subscribe === 'function' && d < max) {
+                    return subscribeCleanup(r.value, next(d + 1))
+                } else {
+                    set(r)
+                }
+            }
+        }
+        return subscribeCleanup(store, next(0))
+    })
+    return new ReadableResult(flat) as any
+}
+
+type Cleanup = () => void
+type CleanupSubscriber<T> = (value: T) => Cleanup | void
+
+function subscribeCleanup<T>(store: Readable<T>, run: CleanupSubscriber<T>): Unsubscriber {
+    let cleanup = noop
+    const unsub = store.subscribe((v) => {
+        cleanup()
+        cleanup = run(v) || noop
+    })
+    return () => {
+        cleanup()
+        unsub()
+    }
+}
+
+// eslint-disable-next-line @typescript-eslint/no-empty-function
+function noop() {}
