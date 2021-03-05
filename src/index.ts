@@ -153,7 +153,11 @@ export function writable<T>(...args: any[]): WritableResult<T> {
  */
 export function derived<S extends Stores, T>(
     stores: S,
-    fn: (values: StoresValues<S>) => T | Promise<T>
+    fn: (values: StoresValues<S>) => Promise<T>
+): ReadableResult<T>
+export function derived<S extends Stores, T>(
+    stores: S,
+    fn: (values: StoresValues<S>) => T
 ): ReadableResult<T>
 export function derived<S extends Stores, T>(
     stores: S,
@@ -174,7 +178,7 @@ export function derived<S extends Stores, T>(stores: S, fn: any): ReadableResult
             if (values.every((v) => v !== undefined)) {
                 try {
                     const rv = fn(
-                        values as StoresValues<S>,
+                        single ? values[0] : values,
                         (value) => {
                             set({value})
                         },
