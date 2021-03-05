@@ -17,7 +17,7 @@ With this we can let the derived stores act only on resolved values and short-ci
 const numberStore = writable() // no initial value required
 
 HorseSensor.global.addEventListener('neeeeigh', (event) => {
-    store.set({value: event.hay.numNeedles})
+    numberStore.set({value: event.hay.numNeedles})
 })
 
 const remoteStore = readable((set, error) => {
@@ -40,7 +40,7 @@ derivedStore.subscribe((result) => {
 })
 ```
 
-And since the result stores work nicely with promises you could write the remoteStore using an async function:
+And since the result stores work nicely with promises you could write the remoteStore from above using an async function instead:
 
 ```ts
 const remoteStore = readable(async () => {
