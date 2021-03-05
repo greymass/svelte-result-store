@@ -45,12 +45,15 @@ export class ReadableResult<T> implements Readable<Result<T>> {
      * A store always containing a value when the result is resolved.
      * @param value The value used in place of errors.
      */
-    replaceErrors(value: T): Readable<T | undefined> {
+    catch(handler: (error: Error) => T | void): Readable<T | undefined> {
         return {
             subscribe: (set) =>
                 this.subscribe((result) => {
                     if (result.error !== undefined) {
-                        set(value)
+                        const value = handler(result.error)
+                        if (value) {
+                            set(value)
+                        }
                     } else if (result.value !== undefined) {
                         set(result.value)
                     }

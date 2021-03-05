@@ -344,7 +344,7 @@ suite('result store', function () {
         })
     })
 
-    test('replace error', function (done) {
+    test('catch error', function (done) {
         const a = writable({value: 10})
         const b = derived(a, ($a) => {
             if ($a >= 10) {
@@ -354,7 +354,12 @@ suite('result store', function () {
             }
         })
         let n = 0
-        b.replaceErrors(42).subscribe((v) => {
+        let error: Error | undefined
+        const handler = (e: Error) => {
+            error = e
+            return 42
+        }
+        b.catch(handler).subscribe((v) => {
             switch (++n) {
                 case 1:
                     assert.equal(v, 42)
@@ -362,6 +367,7 @@ suite('result store', function () {
                     break
                 case 2:
                     assert.equal(v, 4)
+                    assert.equal(String(error), 'Error: fail')
                     done()
                     break
                 default:
