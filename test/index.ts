@@ -400,6 +400,153 @@ suite('result store', function () {
             }
         })
     })
+
+    test('map', function (done) {
+        const a = writable({value: 1})
+        const b = a.map((result) => {
+            if (result.value === 99) {
+                throw new Error('Thrown')
+            }
+            return {value: (result.value || 21) * 2}
+        })
+        let n = 0
+        b.subscribe((r) => {
+            switch (++n) {
+                case 1:
+                    assert.equal(r.value, 2)
+                    a.set({error: new Error('Fail')})
+                    break
+                case 2:
+                    assert.equal(r.value, 42)
+                    a.set({value: 99})
+                    break
+                case 3:
+                    assert.equal(r.error?.message, 'Thrown')
+                    done()
+                    break
+                default:
+                    assert.fail()
+            }
+        })
+    })
+
+    test('flatMap', function (done) {
+        const a = writable({value: 1})
+        const b = a.flatMap((result) => {
+            if (result.value === 99) {
+                throw new Error('Thrown')
+            }
+            const value = result.value || 21
+            return readable({value: value * 2}, (set) => {
+                const timer = setInterval(() => {
+                    set(value * 4)
+                }, 1)
+                return () => {
+                    clearInterval(timer)
+                }
+            })
+        })
+        let n = 0
+        const unsub = b.subscribe((r) => {
+            switch (++n) {
+                case 1:
+                    assert.equal(r.value, 2)
+                    break
+                case 2:
+                    assert.equal(r.value, 4)
+                    a.set({error: new Error('Fail')})
+                    break
+                case 3:
+                    assert.equal(r.value, 42)
+                    break
+                case 4:
+                    assert.equal(r.value, 84)
+                    a.set({value: 99})
+                    break
+                case 5:
+                    assert.equal(r.error?.message, 'Thrown')
+                    unsub()
+                    done()
+                    break
+                default:
+                    assert.fail()
+            }
+        })
+    })
+
+    test('mapValue', function (done) {
+        const a = writable({value: 1})
+        const b = a.mapValue((value) => {
+            if (value === 99) {
+                throw new Error('Thrown')
+            }
+            return value * 2
+        })
+        let n = 0
+        b.subscribe((r) => {
+            switch (++n) {
+                case 1:
+                    assert.equal(r.value, 2)
+                    a.set({value: 21})
+                    break
+                case 2:
+                    assert.equal(r.value, 42)
+                    a.set({value: 99})
+                    break
+                case 3:
+                    assert.equal(r.error?.message, 'Thrown')
+                    done()
+                    break
+                default:
+                    assert.fail()
+            }
+        })
+    })
+
+    test('flatMapValue', function (done) {
+        const a = writable({value: 1})
+        const b = a.flatMapValue((value) => {
+            if (value === 99) {
+                throw new Error('Thrown')
+            }
+            const nest = readable({value: value * 2})
+            return readable({value: nest}, (set) => {
+                const timer = setInterval(() => {
+                    const nest2 = readable({value: value * 4})
+                    set(nest2)
+                }, 1)
+                return () => {
+                    clearInterval(timer)
+                }
+            })
+        })
+        let n = 0
+        const unsub = b.subscribe((r) => {
+            switch (++n) {
+                case 1:
+                    assert.equal(r.value, 2)
+                    break
+                case 2:
+                    assert.equal(r.value, 4)
+                    a.set({value: 21})
+                    break
+                case 3:
+                    assert.equal(r.value, 42)
+                    break
+                case 4:
+                    assert.equal(r.value, 84)
+                    a.set({value: 99})
+                    break
+                case 5:
+                    assert.equal(r.error?.message, 'Thrown')
+                    unsub()
+                    done()
+                    break
+                default:
+                    assert.fail()
+            }
+        })
+    })
 })
 
 function sleep(ms: number) {

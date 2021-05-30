@@ -61,6 +61,85 @@ export class ReadableResult<T> implements Readable<Result<T>> {
         }
     }
 
+    /** Transform the results to a new ReadableResult store. */
+    map<V>(transform: (result: Result<T>) => Result<V>): ReadableResult<V> {
+        const store: Readable<Result<V>> = {
+            subscribe: (set) =>
+                this.subscribe((result) => {
+                    if (result.error !== undefined || result.value !== undefined) {
+                        let newResult: Result<V> = {}
+                        try {
+                            newResult = transform(result)
+                        } catch (error) {
+                            newResult.error = error
+                        }
+                        set(newResult)
+                    }
+                }),
+        }
+        return new ReadableResult(store)
+    }
+
+    /** Transform the result value to a new ReadableResult store. */
+    mapValue<V>(transform: (value: T) => V): ReadableResult<V> {
+        const store: Readable<Result<V>> = {
+            subscribe: (set) =>
+                this.subscribe((result) => {
+                    if (result.value !== undefined) {
+                        let value: V
+                        try {
+                            value = transform(result.value)
+                        } catch (error) {
+                            set({error})
+                            return
+                        }
+                        set({value})
+                    }
+                }),
+        }
+        return new ReadableResult(store)
+    }
+
+    /** Transform the results to a new ReadableResult store by flattening the returned readable. */
+    flatMap<V extends Result<any>>(transform: (result: Result<T>) => Readable<V>) {
+        const store: Readable<Required<V>['value']> = {
+            subscribe: (set) =>
+                this.subscribe((result) => {
+                    if (result.error !== undefined || result.value !== undefined) {
+                        let value: Readable<V>
+                        try {
+                            value = transform(result)
+                        } catch (error) {
+                            set({error})
+                            return
+                        }
+                        set({value})
+                    }
+                }),
+        }
+        return flatten(store)
+    }
+
+    /** Transform the result value to a new ReadableResult store by flattening the returned readable. */
+    flatMapValue<V extends Result<any>>(transform: (value: T) => Readable<V>) {
+        const store: Readable<Required<V>['value']> = {
+            subscribe: (set) =>
+                this.subscribe((result) => {
+                    if (result.value !== undefined) {
+                        let value: Readable<V>
+                        try {
+                            value = transform(result.value)
+                        } catch (error) {
+                            set({error})
+                            return
+                        }
+                        set({value})
+                    }
+                }),
+        }
+        return flatten(store)
+    }
+
     /**
      * A store containing the error or undefined.
      */
@@ -219,7 +298,7 @@ type FlatReadableResult<R, D extends number> = {
  * Takes nested readable and flattens it down to just one.
  * @param maxDepth Maximum recursion depth, default 10.
  */
-export function flatten<T extends ReadableResult<any>, D extends number = 10>(
+export function flatten<T extends Readable<Result<any>>, D extends number = 10>(
     store: T,
     maxDepth?: D
 ): ReadableResult<FlatReadableResult<T, D>> {
